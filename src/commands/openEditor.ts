@@ -5,7 +5,7 @@ import { Commands } from './commands'
 import { CommandOptions } from './manipulations/common'
 import { ExtensionModule } from '~/modules'
 import i18n from '~/i18n'
-import { ActionSource, Global, Telemetry, TelemetryKey } from '~/core'
+import { ActionSource, CurrentFile, Global, Loader, Telemetry, TelemetryKey } from '~/core'
 import { promptKeys } from '~/utils'
 
 export default <ExtensionModule> function(ctx) {
@@ -27,6 +27,7 @@ export default <ExtensionModule> function(ctx) {
     let locale: string | undefined
     let mode: EditorPanel['mode'] = 'standalone'
     let index: number | undefined
+    let loader: Loader | undefined
 
     // from command pattele
     if (!item) {
@@ -35,22 +36,26 @@ export default <ExtensionModule> function(ctx) {
         mode = 'currentFile'
 
       key = await promptKeys(i18n.t('prompt.choice_key_to_open'))
+      loader = CurrentFile.loader
     }
     // from tree view
     else if (item instanceof LocaleTreeItem) {
       actionSource = ActionSource.TreeView
       key = item.node.keypath
       locale = item.node.type === 'record' ? item.node.locale : undefined
+      loader = item.loader
     }
     // from internal command call
     else if (typeof item === 'string') {
       key = item
+      loader = CurrentFile.loader
     }
     // from hover
     else if (item.keypath) {
       actionSource = ActionSource.Hover
       key = item.keypath
       locale = item.locale
+      loader = item.loader || CurrentFile.loader
       if (item.keyIndex != null) {
         mode = 'currentFile'
         index = item.keyIndex
@@ -65,7 +70,7 @@ export default <ExtensionModule> function(ctx) {
 
     const panel = EditorPanel.createOrShow(ctx, mode === 'currentFile' ? ViewColumn.Two : undefined)
     panel.mode = mode
-    panel.openKey(key, locale, index)
+    panel.openKey(key, locale, index, loader)
   }
 
   function updateContext(doc?: TextDocument) {

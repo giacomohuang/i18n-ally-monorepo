@@ -9,6 +9,7 @@ export interface CommandOptions {
   from?: string
   locales?: string[]
   keyIndex?: number
+  loader?: Loader
   actionSource?: ActionSource
 }
 
@@ -22,10 +23,12 @@ export function getNodeOrRecord(item?: LocaleTreeItem | CommandOptions): LocaleN
       : undefined
   }
 
+  const loader = item.loader || CurrentFile.loader
+
   if (item.locale)
-    return CurrentFile.loader.getRecordByKey(item.keypath, item.locale, true)
+    return loader.getRecordByKey(item.keypath, item.locale, true)
   else
-    return CurrentFile.loader.getNodeByKey(item.keypath, true)
+    return loader.getNodeByKey(item.keypath, true)
 }
 
 export function getNode(item?: LocaleTreeItem | CommandOptions | ProgressSubmenuItem) {
@@ -41,7 +44,7 @@ export function getNode(item?: LocaleTreeItem | CommandOptions | ProgressSubmenu
     return
   }
 
-  return CurrentFile.loader.getNodeByKey(item.keypath, true)
+  return (item.loader || CurrentFile.loader).getNodeByKey(item.keypath, true)
 }
 
 export async function getRecordFromNode(node: Node, defaultLocale?: string, loader: Loader = CurrentFile.loader) {

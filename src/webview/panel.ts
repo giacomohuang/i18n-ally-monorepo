@@ -4,7 +4,7 @@ import { WebviewPanel, Disposable, window, ViewColumn, Uri, ExtensionContext, wo
 import { EXT_EDITOR_ID } from '~/meta'
 import { Protocol } from '~/protocol'
 import i18n from '~/i18n'
-import { CurrentFile, Global, KeyInDocument, KeyDetector, Config, Telemetry, TelemetryKey, ActionSource } from '~/core'
+import { CurrentFile, Global, KeyInDocument, KeyDetector, Config, Telemetry, TelemetryKey, ActionSource, Loader } from '~/core'
 
 export class EditorContext {
   filepath?: string
@@ -23,7 +23,9 @@ export class EditorPanel {
   private readonly _protocol: Protocol
   private readonly _ctx: ExtensionContext
   private _disposables: Disposable[] = []
+  private _loaderDisposable: Disposable | undefined
   private _editing_key: string | undefined
+  private _loader: Loader | undefined
   private _mode: 'standalone' | 'currentFile' = 'standalone'
 
   get mode() {
@@ -33,6 +35,10 @@ export class EditorPanel {
   set mode(v) {
     if (this._mode !== v)
       this._mode = v
+  }
+
+  private get loader() {
+    return this._loader || CurrentFile.loader
   }
 
   public static createOrShow(ctx: ExtensionContext, column?: ViewColumn) {
@@ -70,7 +76,7 @@ export class EditorPanel {
     this._protocol = new Protocol(
       async(message) => {
         if (message.type === 'switch-to')
-          this.openKey(message.keypath!)
+          await this.openKey(message.keypath!)
         else
           this._panel.webview.postMessage(message)
       },
@@ -86,6 +92,8 @@ export class EditorPanel {
         return undefined
       },
       {
+        getLoader: () => this.loader,
+        withContext: fn => this.withEditorContext(fn),
         get extendConfig() {
           return {
             extensionRoot: webview.asWebviewUri(Uri.file(Config.extensionPath!)).toString(),
@@ -108,7 +116,7 @@ export class EditorPanel {
     CurrentFile.loader.onDidChange(
       () => {
         if (this._editing_key)
-          this.openKey(this._editing_key)
+          this.openKey(this._editing_key, undefined, undefined, this._loader)
       },
       null,
       this._disposables,
@@ -148,6 +156,27 @@ export class EditorPanel {
     })
   }
 
+  private setLoader(loader?: Loader) {
+    const nextLoader = loader || this._loader || CurrentFile.loader
+    if (this._loader === nextLoader)
+      return
+
+    this._loaderDisposable?.dispose()
+    this._loader = nextLoader
+    this._loaderDisposable = nextLoader?.onDidChange(() => {
+      if (this._editing_key)
+        this.openKey(this._editing_key, undefined, undefined, nextLoader)
+    })
+  }
+
+  private async withEditorContext<T>(fn: () => T | Promise<T>): Promise<T> {
+    const rootContext = this.loader?.rootContext
+    if (rootContext)
+      return await Global.withRootContext(rootContext, fn)
+
+    return await fn()
+  }
+
   public sendCurrentFileContext() {
     if (this.mode === 'standalone')
       this.setContext({})
@@ -175,26 +204,31 @@ export class EditorPanel {
     return true
   }
 
-  public openKey(keypath: string, locale?: string, index?: number) {
-    const node = CurrentFile.loader.getNodeByKey(keypath, true)
-    if (node) {
-      this._editing_key = keypath
-      this._protocol.postMessage({
-        type: 'route',
-        route: 'open-key',
-        data: {
-          locale,
-          keypath,
-          records: CurrentFile.loader.getShadowLocales(node),
-          reviews: Global.reviews.getReviews(keypath),
-          keyIndex: index,
-        },
-      })
-      this.sendCurrentFileContext()
-    }
-    else {
-      // TODO: Error
-    }
+  public async openKey(keypath: string, locale?: string, index?: number, loader?: Loader) {
+    this.setLoader(loader)
+
+    await this.withEditorContext(async() => {
+      const node = this.loader.getNodeByKey(keypath, true)
+      if (node) {
+        this._editing_key = keypath
+        await this._protocol.updateConfig()
+        await this._protocol.postMessage({
+          type: 'route',
+          route: 'open-key',
+          data: {
+            locale,
+            keypath,
+            records: this.loader.getShadowLocales(node),
+            reviews: Global.reviews.getReviews(keypath),
+            keyIndex: index,
+          },
+        })
+        this.sendCurrentFileContext()
+      }
+      else {
+        // TODO: Error
+      }
+    })
   }
 
   async navigateKey(data: KeyInDocument & {filepath: string; keyIndex: number}) {
@@ -203,7 +237,7 @@ export class EditorPanel {
     if (!data.filepath)
       return
 
-    this.openKey(data.key, undefined, data.keyIndex)
+    await this.openKey(data.key, undefined, data.keyIndex)
     const doc = await workspace.openTextDocument(Uri.file(data.filepath))
     const editor = await window.showTextDocument(doc, ViewColumn.One)
     editor.selection = new Selection(
@@ -217,6 +251,7 @@ export class EditorPanel {
     EditorPanel.currentPanel = undefined
 
     this._panel.dispose()
+    this._loaderDisposable?.dispose()
 
     Disposable.from(...this._disposables).dispose()
 

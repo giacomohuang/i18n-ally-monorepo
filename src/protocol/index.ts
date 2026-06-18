@@ -5,7 +5,7 @@ import { commands } from 'vscode'
 import { TranslateKeys, RenameKey } from '../commands/manipulations'
 import { EXT_ID } from '~/meta'
 import { Commands } from '~/commands'
-import { CurrentFile, Global, Config, ActionSource, Telemetry, TelemetryKey } from '~/core'
+import { CurrentFile, Global, Config, ActionSource, Telemetry, TelemetryKey, Loader } from '~/core'
 import i18n from '~/i18n'
 import { isDev } from '~/env'
 
@@ -28,14 +28,21 @@ export class Protocol {
     private readonly _postMessage: (message: Message) => Promise<void>,
     public extendHandler?: (message: Message) => Thenable<boolean | undefined>,
     public options?: {
+      getLoader?: () => Loader | undefined
+      withContext?: <T>(fn: () => T | Promise<T>) => Promise<T>
       extendConfig?: any
     },
   ) {
 
   }
 
+  get loader() {
+    return this.options?.getLoader?.() || CurrentFile.loader
+  }
+
   get config() {
-    const locales = Global.loader?.locales || []
+    const loader = this.loader
+    const locales = loader?.locales || []
     return {
       debug: isDev,
       review: Config.reviewEnabled,
@@ -53,6 +60,13 @@ export class Protocol {
     }
   }
 
+  async withContext<T>(fn: () => T | Promise<T>): Promise<T> {
+    if (this.options?.withContext)
+      return await this.options.withContext(fn)
+
+    return await fn()
+  }
+
   async postMessage(message: Message) {
     this.pendingMessages.push(message)
     if (this.ready) {
@@ -63,15 +77,15 @@ export class Protocol {
     }
   }
 
-  updateConfig() {
-    this.postMessage({
+  async updateConfig() {
+    return await this.withContext(() => this.postMessage({
       type: 'config',
       data: this.config,
-    })
+    }))
   }
 
-  updateI18nMessages() {
-    this.postMessage({
+  async updateI18nMessages() {
+    return await this.postMessage({
       type: 'i18n',
       data: i18n.messages,
     })
@@ -92,56 +106,67 @@ export class Protocol {
     switch (message.type) {
       case 'ready':
         this.ready = true
-        this.postMessage({ type: 'ready' })
-        this.updateConfig()
+        await this.postMessage({ type: 'ready' })
+        await this.updateConfig()
         break
 
       case 'init':
-        this.updateI18nMessages()
+        await this.updateI18nMessages()
         break
 
       case 'edit':
-        CurrentFile.loader.write({
+        await this.withContext(() => this.loader.write({
           keypath: message.data.keypath,
           locale: message.data.locale,
           value: message.data.value,
-        })
+        }))
         break
 
       case 'rename-key':
-        const newkey = await RenameKey(message.keypath)
+        const newkey = await this.withContext(() => RenameKey({
+          keypath: message.keypath!,
+          loader: this.loader,
+          actionSource: ActionSource.UiEditor,
+        }))
         if (newkey)
           this.switchToKey(newkey)
         break
 
       case 'translate':
-        TranslateKeys({
+        await this.withContext(() => TranslateKeys({
           actionSource: ActionSource.UiEditor,
+          loader: this.loader,
           ...message.data,
-        })
+        }))
         break
 
       case 'review.description':
-        Global.reviews.promptEditDescription(message.keypath!)
+        await this.withContext(() => Global.reviews.promptEditDescription(message.keypath!))
         break
 
       case 'review.comment':
-        Telemetry.track(TelemetryKey.ReviewAddComment, { source: ActionSource.UiEditor })
-        Global.reviews.addComment(message.keypath!, message.locale!, message.data!)
+        await this.withContext(() => {
+          Telemetry.track(TelemetryKey.ReviewAddComment, { source: ActionSource.UiEditor })
+          return Global.reviews.addComment(message.keypath!, message.locale!, message.data!)
+        })
         break
 
       case 'review.edit':
-        Telemetry.track(TelemetryKey.ReviewEditComment, { source: ActionSource.UiEditor })
-        Global.reviews.editComment(message.keypath!, message.locale!, message.data!)
+        await this.withContext(() => {
+          Telemetry.track(TelemetryKey.ReviewEditComment, { source: ActionSource.UiEditor })
+          return Global.reviews.editComment(message.keypath!, message.locale!, message.data!)
+        })
         break
 
       case 'review.resolve':
-        Telemetry.track(TelemetryKey.ReviewResolveComment, { source: ActionSource.UiEditor })
-        Global.reviews.resolveComment(message.keypath!, message.locale!, message.commentId!)
+        await this.withContext(() => {
+          Telemetry.track(TelemetryKey.ReviewResolveComment, { source: ActionSource.UiEditor })
+          return Global.reviews.resolveComment(message.keypath!, message.locale!, message.commentId!)
+        })
         break
 
       case 'review.apply-suggestion':
-        Global.reviews.applySuggestion(message.keypath!, message.locale!, message.commentId!)
+        await this.withContext(() => Global.reviews.applySuggestion(message.keypath!, message.locale!, message.commentId!))
         break
 
       case 'open-builtin-settings':
@@ -153,15 +178,15 @@ export class Protocol {
         break
 
       case 'translation.apply':
-        Global.reviews.applyTranslationCandidate(message.keypath!, message.locale!)
+        await this.withContext(() => Global.reviews.applyTranslationCandidate(message.keypath!, message.locale!))
         break
 
       case 'translation.edit':
-        Global.reviews.promptEditTranslation(message.keypath, message.locale)
+        await this.withContext(() => Global.reviews.promptEditTranslation(message.keypath, message.locale))
         break
 
       case 'translation.discard':
-        Global.reviews.discardTranslationCandidate(message.keypath!, message.locale!)
+        await this.withContext(() => Global.reviews.discardTranslationCandidate(message.keypath!, message.locale!))
         break
     }
   }

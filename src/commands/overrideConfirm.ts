@@ -1,9 +1,9 @@
 import { window } from 'vscode'
-import { CurrentFile } from '~/core'
+import { CurrentFile, Loader } from '~/core'
 import i18n from '~/i18n'
 
-export async function overrideConfirm(keypath: string, allowSkip = false, allowRenter = false) {
-  const node = CurrentFile.loader.getTreeNodeByKey(keypath)
+export async function overrideConfirm(keypath: string, allowSkip = false, allowRenter = false, loader: Loader = CurrentFile.loader) {
+  const node = loader.getTreeNodeByKey(keypath)
 
   if (node) {
     const Override = i18n.t('prompt.button_override')

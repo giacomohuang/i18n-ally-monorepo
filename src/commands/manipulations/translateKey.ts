@@ -35,7 +35,7 @@ async function translateKeys(
 
     source = item instanceof ProgressSubmenuItem ? item.sourceLanguage : Config.sourceLanguage
     if (Config.translatePromptSource)
-      source = await promptForSourceLocale(source, node, item instanceof ProgressSubmenuItem ? item.locales : Global.allLocales)
+      source = await promptForSourceLocale(source, node, item instanceof ProgressSubmenuItem ? item.locales : item?.loader?.locales || Global.allLocales)
 
     if (source == null)
       return
@@ -63,7 +63,7 @@ async function translateKeys(
       nodes.push(node)
   }
 
-  const loader = item instanceof ProgressSubmenuItem ? item.loader : CurrentFile.loader
+  const loader = item instanceof ProgressSubmenuItem ? item.loader : item instanceof LocaleTreeItem ? item.loader : item?.loader || CurrentFile.loader
   await Translator.translateNodes(loader, nodes, source, targetLocales)
 }
 
