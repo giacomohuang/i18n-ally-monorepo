@@ -1,0 +1,66 @@
+// Place your settings in this file to overwrite default and user settings.
+{
+  "search.exclude": {
+    "out": true,
+    "dist": true,
+    "node_modules": true,
+    "CHANGELOG.md": true,
+    "examples": true,
+    "res": true,
+    "screenshots": true
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "cSpell.words": [
+    "Exts",
+    "Unflatten",
+    "enablement",
+    "exts",
+    "inplace",
+    "inplaces",
+    "joomla",
+    "lokalise",
+    "regs",
+    "youdao"
+  ],
+  "editor.defaultFormatter": "dbaeumer.vscode-eslint",
+  "editor.formatOnSave": false,
+  "i18n-ally.localesPaths": "./locales",
+  "i18n-ally.sourceLanguage": "en",
+  "i18n-ally.keystyle": "flat",
+  "i18n-ally.preferredDelimiter": "_",
+  "i18n-ally.sortKeys": true,
+  "i18n-ally.sortCompare": "binary",
+  "i18n-ally.keepFulfilled": true,
+  "i18n-ally.translate.promptSource": true,
+  "i18n-ally.pathMatcher": "{locale}.json",
+  "i18n-ally.translate.saveAsCandidates": true,
+  "i18n-ally.keysInUse": [
+    "view.progress_submenu.translated_keys",
+    "view.progress_submenu.missing_keys",
+    "view.progress_submenu.empty_keys"
+  ],
+  "i18n-ally.usage.scanningIgnore": [
+    "examples",
+  ],
+  "i18n-ally.regex.usageMatchAppend": [
+    "/\\*\\s*i18n\\s*\\*/\\s*['\"`]({key})['\"`]"
+  ],
+  "i18n-ally.enabledFrameworks": [
+    "vscode",
+    "vue",
+    "general"
+  ],
+  "i18n-ally.theme.annotationMissingBorder": "#d37070",
+  "i18n-ally.theme.annotationMissing": "#d37070",
+  "eslint.validate": [
+    "javascript",
+    "typescript",
+    "javascriptreact",
+    "typescriptreact",
+    "vue",
+    "html"
+  ],
+  "typescript.tsdk": "node_modules/typescript/lib",
+}

@@ -1,0 +1,111 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`React with i18next get correct coverage report 1`] = `
+Object {
+  "allKeys": Array [
+    "pages.home.title",
+    "translation.description.part1",
+    "translation.description.part2",
+    "translation.foo.bar",
+    "translation.title",
+    "translation.titlew",
+  ],
+  "emptyKeys": Array [],
+  "locale": "en",
+  "missing": 0,
+  "missingKeys": Array [],
+  "total": 6,
+  "translated": 6,
+  "translatedKeys": Array [
+    "pages.home.title",
+    "translation.description.part1",
+    "translation.description.part2",
+    "translation.foo.bar",
+    "translation.title",
+    "translation.titlew",
+  ],
+}
+`;
+
+exports[`React with i18next get keys 1`] = `
+Array [
+  Object {
+    "end": 526,
+    "key": "translation.title",
+    "quoted": true,
+    "start": 509,
+  },
+  Object {
+    "end": 739,
+    "key": "translation.description.part1",
+    "quoted": true,
+    "start": 710,
+  },
+  Object {
+    "end": 1333,
+    "key": "translation.description.part2",
+    "quoted": true,
+    "start": 1304,
+  },
+  Object {
+    "end": 1428,
+    "key": "translation.description.part2",
+    "quoted": true,
+    "start": 1399,
+  },
+  Object {
+    "end": 1611,
+    "key": "translation.foo.bar",
+    "quoted": true,
+    "start": 1608,
+  },
+  Object {
+    "end": 1660,
+    "key": "pages.home.title",
+    "quoted": true,
+    "start": 1644,
+  },
+  Object {
+    "end": 1684,
+    "key": "pages.home.title",
+    "quoted": true,
+    "start": 1668,
+  },
+  Object {
+    "end": 1792,
+    "key": "pages.home.title",
+    "quoted": true,
+    "start": 1787,
+  },
+  Object {
+    "end": 1842,
+    "key": "translation.title",
+    "quoted": true,
+    "start": 1825,
+  },
+  Object {
+    "end": 1953,
+    "key": "pages.home.title",
+    "quoted": true,
+    "start": 1948,
+  },
+  Object {
+    "end": 1991,
+    "key": "translation.title",
+    "quoted": true,
+    "start": 1986,
+  },
+  Object {
+    "end": 2190,
+    "key": "pages.home.title",
+    "quoted": true,
+    "start": 2185,
+  },
+  Object {
+    "end": 2267,
+    "key": "translation.title",
+    "quoted": true,
+    "start": 2262,
+  },
+]
+`;
