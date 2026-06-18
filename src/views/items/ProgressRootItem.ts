@@ -1,16 +1,22 @@
-import { unicodeProgressBar, unicodeDecorate } from '~/utils'
+import { ExtensionContext } from 'vscode'
 import { ProgressMissingListItem } from './ProgressMissingListItem'
 import { ProgressEmptyListItem } from './ProgressEmptyListItem'
-import { ProgressBaseItem } from './ProgressBaseItem'
+import { ProgressBaseItem, ProgressContext } from './ProgressBaseItem'
 import { ProgressTranslatedListItem } from './ProgressTranslatedListItem'
 import { ReviewRequestChangesRoot } from './ReviewRequestChanges'
 import { BaseTreeItem } from './Base'
 import { ReviewTranslationCandidates } from './ReviewTranslationCandidates'
 import { ReviewSuggestions } from './ReviewSuggestions'
 import { Seperator } from './Seperator'
-import { Config, Global } from '~/core'
+import { unicodeProgressBar, unicodeDecorate } from '~/utils'
+import { Config, Coverage, Global } from '~/core'
 
 export class ProgressRootItem extends ProgressBaseItem {
+  constructor(ctx: ExtensionContext, node: Coverage, progressContext?: ProgressContext) {
+    super(ctx, node, progressContext)
+    this.id = `progress-${progressContext?.rootContext?.rootpath || 'default'}-${node.locale}`
+  }
+
   // @ts-expect-error
   get description(): string {
     const rate = this.node.translated / this.node.total
@@ -30,15 +36,15 @@ export class ProgressRootItem extends ProgressBaseItem {
   }
 
   get visible() {
-    return !Config.ignoredLocales.includes(this.locale)
+    return !this.ignoredLocales.includes(this.locale)
   }
 
   get isSource() {
-    return this.locale === Config.sourceLanguage
+    return this.locale === this.sourceLanguage
   }
 
   get isDisplay() {
-    return this.locale === Config.displayLanguage
+    return this.locale === this.displayLanguage
   }
 
   // @ts-expect-error
@@ -71,7 +77,7 @@ export class ProgressRootItem extends ProgressBaseItem {
     ]
     const reviewItems: BaseTreeItem[] = []
 
-    if (Config.reviewEnabled) {
+    if (!this.progressContext && Config.reviewEnabled) {
       const comments = Global.reviews.getCommentsByLocale(this.locale)
       const translations = Global.reviews.getTranslationCandidatesLocale(this.locale)
       const change_requested = comments.filter(c => c.type === 'request_change')

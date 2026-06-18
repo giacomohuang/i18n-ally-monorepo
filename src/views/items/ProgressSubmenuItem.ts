@@ -3,12 +3,11 @@ import { LocaleTreeItem } from './LocaleTreeItem'
 import { ProgressBaseItem } from './ProgressBaseItem'
 import { ProgressRootItem } from './ProgressRootItem'
 import i18n from '~/i18n'
-import { Config, CurrentFile } from '~/core'
 
 export abstract class ProgressSubmenuItem extends ProgressBaseItem {
   constructor(protected root: ProgressRootItem, public readonly labelKey: string, public readonly icon?: string) {
-    super(root.ctx, root.node)
-    this.id = `progress-${this.node.locale}-${labelKey}`
+    super(root.ctx, root.node, root.progressContext)
+    this.id = `${root.id || 'progress'}-${this.node.locale}-${labelKey}`
   }
 
   // @ts-expect-error
@@ -37,10 +36,28 @@ export abstract class ProgressSubmenuItem extends ProgressBaseItem {
 
   set collapsibleState(_) { }
   async getChildren() {
-    const locales = Array.from(new Set([this.node.locale, Config.sourceLanguage]))
-    return this.getKeys()
-      .map(key => CurrentFile.loader.getTreeNodeByKey(key))
-      .map(node => node && new LocaleTreeItem(this.ctx, node, true, this.node.locale, locales))
-      .filter(item => item) as LocaleTreeItem[]
+    return await this.withProgressContext(() => {
+      const locales = Array.from(new Set([this.node.locale, this.root.sourceLanguage]))
+      return this.getKeys()
+        .map(key => this.root.loader.getTreeNodeByKey(key))
+        .map(node => node && new LocaleTreeItem(this.ctx, node, true, this.node.locale, locales, this.root.loader))
+        .filter(item => item) as LocaleTreeItem[]
+    })
+  }
+
+  get loader() {
+    return this.root.loader
+  }
+
+  get sourceLanguage() {
+    return this.root.sourceLanguage
+  }
+
+  get locales() {
+    return this.root.locales
+  }
+
+  async withProgressContext<T>(fn: () => T | Promise<T>): Promise<T> {
+    return await this.root.withProgressContext(fn)
   }
 }

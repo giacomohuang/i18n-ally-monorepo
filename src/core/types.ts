@@ -1,4 +1,4 @@
-import { Range, TextDocument } from 'vscode'
+import { Range, TextDocument, WorkspaceFolder } from 'vscode'
 
 export interface OptionalFeatures {
   VueSfc?: boolean
@@ -196,4 +196,10 @@ export interface ResolvedMonorepoProjectConfig extends MonorepoProjectConfig {
   name: string
   rootpath: string
   index: number
+}
+
+export interface ResolvedRootContext {
+  rootpath: string
+  project?: ResolvedMonorepoProjectConfig
+  workspaceFolder: WorkspaceFolder
 }

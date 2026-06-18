@@ -106,7 +106,7 @@ export class Translator {
         return
     }
 
-    window.withProgress({
+    await window.withProgress({
       location: ProgressLocation.Notification,
       title: i18n.t('prompt.translate_in_progress'),
       cancellable: true,

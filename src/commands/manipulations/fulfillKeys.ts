@@ -22,7 +22,7 @@ export async function FulfillMissingKeysForProgress(item: ProgressSubmenuItem) {
   const pendings = keys.map(key => ({
     locale,
     value: FULFILL_VALUE,
-    filepath: CurrentFile.loader.getFilepathByKey(key, locale),
+    filepath: item.loader.getFilepathByKey(key, locale),
     keypath: key,
   }))
 
@@ -73,8 +73,12 @@ export async function FulfillKeys(item?: LocaleTreeItem | ProgressSubmenuItem | 
   if (!item)
     pendings = await FulfillAllMissingKeys()
 
-  if (item instanceof ProgressSubmenuItem)
-    pendings = await FulfillMissingKeysForProgress(item)
+  if (item instanceof ProgressSubmenuItem) {
+    pendings = await item.withProgressContext(() => FulfillMissingKeysForProgress(item))
+    if (pendings?.length)
+      await item.withProgressContext(() => item.loader.write(pendings!, false))
+    return
+  }
 
   if (pendings?.length)
     await CurrentFile.loader.write(pendings, false)

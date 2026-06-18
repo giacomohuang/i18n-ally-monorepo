@@ -5,8 +5,7 @@ import { Translator, CurrentFile, Config, Global, LocaleNode, AccaptableTranslat
 import i18n from '~/i18n'
 import { Telemetry, TelemetryKey } from '~/core/Telemetry'
 
-export async function promptForSourceLocale(defaultLocale: string, node?: LocaleNode) {
-  const locales = Global.allLocales
+export async function promptForSourceLocale(defaultLocale: string, node?: LocaleNode, locales = Global.allLocales) {
   const placeHolder = i18n.t('prompt.select_source_language_for_translating', defaultLocale)
 
   const result = await window.showQuickPick(locales
@@ -23,7 +22,7 @@ export async function promptForSourceLocale(defaultLocale: string, node?: Locale
   return result.label || defaultLocale
 }
 
-export async function TranslateKeys(
+async function translateKeys(
   item?: LocaleTreeItem | ProgressSubmenuItem | CommandOptions,
 ) {
   let source: string | undefined
@@ -34,9 +33,9 @@ export async function TranslateKeys(
   else {
     const node = getNode(item)
 
-    source = Config.sourceLanguage
+    source = item instanceof ProgressSubmenuItem ? item.sourceLanguage : Config.sourceLanguage
     if (Config.translatePromptSource)
-      source = await promptForSourceLocale(source, node)
+      source = await promptForSourceLocale(source, node, item instanceof ProgressSubmenuItem ? item.locales : Global.allLocales)
 
     if (source == null)
       return
@@ -50,7 +49,7 @@ export async function TranslateKeys(
   if (item instanceof ProgressSubmenuItem) {
     const to = item.node.locale
     nodes = item.getKeys()
-      .map(key => CurrentFile.loader.getRecordByKey(key, to, true)!)
+      .map(key => item.loader.getRecordByKey(key, to, true)!)
       .filter(i => i)
   }
   else {
@@ -64,5 +63,17 @@ export async function TranslateKeys(
       nodes.push(node)
   }
 
-  Translator.translateNodes(CurrentFile.loader, nodes, source, targetLocales)
+  const loader = item instanceof ProgressSubmenuItem ? item.loader : CurrentFile.loader
+  await Translator.translateNodes(loader, nodes, source, targetLocales)
+}
+
+export async function TranslateKeys(
+  item?: LocaleTreeItem | ProgressSubmenuItem | CommandOptions,
+) {
+  if (item instanceof LocaleTreeItem)
+    return await item.withContext(() => translateKeys(item))
+  if (item instanceof ProgressSubmenuItem)
+    return await item.withProgressContext(() => translateKeys(item))
+
+  return await translateKeys(item)
 }

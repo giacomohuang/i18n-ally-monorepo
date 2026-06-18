@@ -3,12 +3,19 @@ import { EditorPanel } from '../../webview/panel'
 import { BaseTreeItem } from './Base'
 import { decorateLocale, NodeHelper, resolveFlattenRootKeypath, ROOT_KEY, resolveFlattenRoot } from '~/utils'
 import i18n from '~/i18n'
-import { Node, Translator, CurrentFile, Config } from '~/core'
+import { Node, Translator, CurrentFile, Config, Loader, Global } from '~/core'
 import { Commands } from '~/commands'
 
 export class LocaleTreeItem extends BaseTreeItem {
   public readonly node: Node
-  constructor(ctx: ExtensionContext, node: Node, public flatten = false, public readonly displayLocale?: string, public readonly listedLocales?: string[]) {
+  constructor(
+    ctx: ExtensionContext,
+    node: Node,
+    public flatten = false,
+    public readonly displayLocale?: string,
+    public readonly listedLocales?: string[],
+    public readonly loader: Loader = CurrentFile.loader,
+  ) {
     super(ctx)
 
     if (node.type !== 'record')
@@ -106,6 +113,13 @@ export class LocaleTreeItem extends BaseTreeItem {
     return this.node.type === 'node' && (Config.preferEditor || !!EditorPanel.currentPanel)
   }
 
+  async withContext<T>(fn: () => T | Promise<T>): Promise<T> {
+    if (this.loader.rootContext)
+      return await Global.withRootContext(this.loader.rootContext, fn)
+
+    return await fn()
+  }
+
   async getChildren(filter: (node: Node) => boolean = () => true) {
     if (this.editorMode)
       return []
@@ -114,10 +128,10 @@ export class LocaleTreeItem extends BaseTreeItem {
     if (this.node.type === 'tree')
       nodes = Object.values(this.node.children)
     else if (this.node.type === 'node')
-      nodes = Object.values(CurrentFile.loader.getShadowLocales(this.node, this.listedLocales))
+      nodes = Object.values(this.loader.getShadowLocales(this.node, this.listedLocales))
     const items = nodes
       .filter(filter)
-      .map(node => new LocaleTreeItem(this.ctx, node, false))
+      .map(node => new LocaleTreeItem(this.ctx, node, false, undefined, this.listedLocales, this.loader))
     return items
   }
 

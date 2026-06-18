@@ -1,6 +1,5 @@
 import { ProgressRootItem } from './ProgressRootItem'
 import { ProgressSubmenuItem } from './ProgressSubmenuItem'
-import { Config } from '~/core'
 
 export class ProgressMissingListItem extends ProgressSubmenuItem {
   constructor(protected root: ProgressRootItem) {
@@ -10,7 +9,7 @@ export class ProgressMissingListItem extends ProgressSubmenuItem {
   // @ts-expect-error
   get contextValue() {
     const values: string[] = []
-    if (this.node.locale !== Config.sourceLanguage)
+    if (this.node.locale !== this.root.sourceLanguage)
       values.push('translatable')
     values.push('fulfillable')
     return values.join('-')

@@ -5,7 +5,7 @@ import _, { uniq, throttle, set } from 'lodash'
 import fs from 'fs-extra'
 import { findBestMatch } from 'string-similarity'
 import { FILEWATCHER_TIMEOUT } from '../../meta'
-import { ParsedFile, PendingWrite, DirStructure, TargetPickingStrategy } from '../types'
+import { ParsedFile, PendingWrite, DirStructure, TargetPickingStrategy, ResolvedRootContext } from '../types'
 import { LocaleTree } from '../Nodes'
 import { AllyError, ErrorType } from '../Errors'
 import { Analyst, Global, Config } from '..'
@@ -23,26 +23,36 @@ export class LocaleLoader extends Loader {
   private _locale_dirs: string[] = []
   private _localesPaths: string[] | undefined
 
-  constructor(public readonly rootpath: string) {
+  constructor(public readonly rootpath: string, rootContext?: ResolvedRootContext) {
     super(`[LOCALE]${rootpath}`)
+    this.rootContext = rootContext
   }
 
   async init() {
-    this._localesPaths = Global.localesPaths
-    if (await this.findLocaleDirs()) {
-      Log.info(`🚀 Initializing loader "${this.rootpath}"`)
-      this._dir_structure = await this.guessDirStructure()
-      Log.info(`📂 Directory structure: ${this._dir_structure}`)
+    return await this.withContext(async() => {
+      this._localesPaths = Global.localesPaths
+      if (await this.findLocaleDirs()) {
+        Log.info(`🚀 Initializing loader "${this.rootpath}"`)
+        this._dir_structure = await this.guessDirStructure()
+        Log.info(`📂 Directory structure: ${this._dir_structure}`)
 
-      if (Config._pathMatcher)
-        Log.info(`🗃 Custom Path Matcher: ${Config._pathMatcher}`)
+        if (Config._pathMatcher)
+          Log.info(`🗃 Custom Path Matcher: ${Config._pathMatcher}`)
 
-      this._path_matchers = Global.getPathMatchers(this._dir_structure)
-      Log.info(`🗃 Path Matcher Regex: ${this._path_matchers.map(i => i.regex)}`)
-      await this.loadAll()
-    }
-    this.update()
-    Log.divider()
+        this._path_matchers = Global.getPathMatchers(this._dir_structure)
+        Log.info(`🗃 Path Matcher Regex: ${this._path_matchers.map(i => i.regex)}`)
+        await this.loadAll()
+      }
+      this.update()
+      Log.divider()
+    })
+  }
+
+  private async withContext<T>(fn: () => T | Promise<T>): Promise<T> {
+    if (this.rootContext)
+      return await Global.withRootContext(this.rootContext, fn)
+
+    return await fn()
   }
 
   get localesPaths() {
@@ -78,28 +88,32 @@ export class LocaleLoader extends Loader {
 
   // #region throttled functions
   private throttledFullReload = throttle(async() => {
-    Log.info('🔄 Perfroming a full reload', 2)
-    await this.loadAll(false)
-    this.update()
+    await this.withContext(async() => {
+      Log.info('🔄 Perfroming a full reload', 2)
+      await this.loadAll(false)
+      this.update()
+    })
   }, THROTTLE_DELAY, { leading: true })
 
   private throttledUpdate = throttle(() => {
-    this.update()
+    this.withContext(() => this.update())
   }, THROTTLE_DELAY, { leading: true })
 
   private throttledLoadFileWaitingList: [string, string][] = []
 
   private throttledLoadFileExecutor = throttle(async() => {
-    const list = this.throttledLoadFileWaitingList
-    this.throttledLoadFileWaitingList = []
-    if (list.length) {
-      let changed = false
-      for (const [d, r] of list)
-        changed = await this.loadFile(d, r) || changed
+    await this.withContext(async() => {
+      const list = this.throttledLoadFileWaitingList
+      this.throttledLoadFileWaitingList = []
+      if (list.length) {
+        let changed = false
+        for (const [d, r] of list)
+          changed = await this.loadFile(d, r) || changed
 
-      if (changed)
-        this.update()
-    }
+        if (changed)
+          this.update()
+      }
+    })
   }, THROTTLE_DELAY, { leading: true })
 
   private throttledLoadFile = (d: string, r: string) => {
@@ -261,7 +275,12 @@ export class LocaleLoader extends Loader {
     return findBestMatch(fromPath, paths).bestMatch.target
   }
 
-  async write(pendings: PendingWrite|PendingWrite[]) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async write(pendings: PendingWrite|PendingWrite[], _triggerFullfilled = true) {
+    return await this.withContext(async() => this.writeWithContext(pendings))
+  }
+
+  private async writeWithContext(pendings: PendingWrite|PendingWrite[]) {
     if (!Array.isArray(pendings))
       pendings = [pendings]
 
@@ -532,41 +551,43 @@ export class LocaleLoader extends Loader {
   }
 
   private async onFileChanged(type: string, { fsPath: filepath }: { fsPath: string }) {
-    filepath = path.resolve(filepath)
+    return await this.withContext(async() => {
+      filepath = path.resolve(filepath)
 
-    // not tracking
-    if (type !== 'create' && !this._files[filepath])
-      return
+      // not tracking
+      if (type !== 'create' && !this._files[filepath])
+        return
 
-    // already up-to-date
-    if (type !== 'change' && this._files[filepath]?.mtime === this.getMtime(filepath)) {
-      Log.info(`🔄 Skipped on loading "${filepath}" (same mtime)`)
-      return
-    }
+      // already up-to-date
+      if (type !== 'change' && this._files[filepath]?.mtime === this.getMtime(filepath)) {
+        Log.info(`🔄 Skipped on loading "${filepath}" (same mtime)`)
+        return
+      }
 
-    const { dirpath, relative } = this.getRelativePath(filepath) || {}
-    if (!dirpath || !relative)
-      return
+      const { dirpath, relative } = this.getRelativePath(filepath) || {}
+      if (!dirpath || !relative)
+        return
 
-    Log.info(`🔄 File changed (${type}) ${relative}`)
+      Log.info(`🔄 File changed (${type}) ${relative}`)
 
-    // full reload if configured
-    if (Config.fullReloadOnChanged && ['delete', 'change', 'create'].includes(type)) {
-      this.throttledFullReload()
-      return
-    }
+      // full reload if configured
+      if (Config.fullReloadOnChanged && ['delete', 'change', 'create'].includes(type)) {
+        this.throttledFullReload()
+        return
+      }
 
-    switch (type) {
-      case 'delete':
-        delete this._files[filepath]
-        this.throttledUpdate()
-        break
+      switch (type) {
+        case 'delete':
+          delete this._files[filepath]
+          this.throttledUpdate()
+          break
 
-      case 'create':
-      case 'change':
-        this.throttledLoadFile(dirpath, relative)
-        break
-    }
+        case 'create':
+        case 'change':
+          this.throttledLoadFile(dirpath, relative)
+          break
+      }
+    })
   }
 
   private async watchOn(rootPath: string) {

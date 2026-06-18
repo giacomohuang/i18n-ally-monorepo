@@ -1,6 +1,6 @@
 import { window } from 'vscode'
 import { LocaleTreeItem, ProgressSubmenuItem } from '~/views'
-import { CurrentFile, Global, Node, LocaleNode, LocaleRecord, ActionSource } from '~/core'
+import { CurrentFile, Global, Node, LocaleNode, LocaleRecord, ActionSource, Loader } from '~/core'
 import i18n from '~/i18n'
 
 export interface CommandOptions {
@@ -44,7 +44,7 @@ export function getNode(item?: LocaleTreeItem | CommandOptions | ProgressSubmenu
   return CurrentFile.loader.getNodeByKey(item.keypath, true)
 }
 
-export async function getRecordFromNode(node: Node, defaultLocale?: string) {
+export async function getRecordFromNode(node: Node, defaultLocale?: string, loader: Loader = CurrentFile.loader) {
   if (node.type === 'tree')
     return
 
@@ -52,7 +52,7 @@ export async function getRecordFromNode(node: Node, defaultLocale?: string) {
     return node
 
   if (node.type === 'node') {
-    const locales = CurrentFile.loader.getShadowLocales(node)
+    const locales = loader.getShadowLocales(node)
     const locale = defaultLocale || await window.showQuickPick(
       Global.visibleLocales,
       { placeHolder: i18n.t('prompt.choice_locale') },

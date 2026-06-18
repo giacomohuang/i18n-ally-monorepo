@@ -27,14 +27,19 @@ async function pickLocale(locale: any, type: 'displayLanguage' | 'sourceLanguage
 function handler(type: 'displayLanguage' | 'sourceLanguage') {
   return async(options?: any) => {
     const locale = await pickLocale(options, type)
-    if (locale)
-      Config[type] = locale
+    if (!locale)
+      return
+
+    if (options instanceof ProgressBaseItem)
+      return await options.withProgressContext(() => Config[type] = locale)
+
+    Config[type] = locale
   }
 }
 
 function visibilityHandler(value?: boolean) {
   return (item: ProgressBaseItem) => {
-    Config.toggleLocaleVisibility(item.node.locale, value)
+    return item.withProgressContext(() => Config.toggleLocaleVisibility(item.node.locale, value))
   }
 }
 

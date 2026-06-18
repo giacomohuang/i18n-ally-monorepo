@@ -2,12 +2,12 @@ import { window } from 'vscode'
 import { Log } from '~/utils'
 import { LocaleTreeItem, UsageReportRootItem } from '~/views'
 import i18n from '~/i18n'
-import { LocaleRecord, CurrentFile, Analyst } from '~/core'
+import { LocaleRecord, CurrentFile, Analyst, Loader } from '~/core'
 import { Telemetry, TelemetryKey } from '~/core/Telemetry'
 
-export async function DeleteRecords(records: LocaleRecord[]) {
+export async function DeleteRecords(records: LocaleRecord[], loader: Loader = CurrentFile.loader) {
   try {
-    await CurrentFile.loader.write(
+    await loader.write(
       records
         .filter(record => !record.shadow)
         .map(record => ({
@@ -26,6 +26,13 @@ export async function DeleteRecords(records: LocaleRecord[]) {
 }
 
 export async function DeleteKey(item: LocaleTreeItem | UsageReportRootItem) {
+  if (item instanceof LocaleTreeItem)
+    return await item.withContext(() => deleteKey(item))
+
+  return await deleteKey(item)
+}
+
+async function deleteKey(item: LocaleTreeItem | UsageReportRootItem) {
   Telemetry.track(TelemetryKey.DeleteKey)
 
   const Yes = i18n.t('prompt.button_yes')
@@ -64,7 +71,7 @@ export async function DeleteKey(item: LocaleTreeItem | UsageReportRootItem) {
     return
   }
 
-  await DeleteRecords(records)
+  await DeleteRecords(records, item instanceof LocaleTreeItem ? item.loader : CurrentFile.loader)
 
   if (Analyst.hasCache()) {
     setTimeout(() => {

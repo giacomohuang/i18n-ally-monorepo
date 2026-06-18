@@ -3,9 +3,10 @@ import throttle from 'lodash/throttle'
 import { notEmpty } from '../../utils/utils'
 import { BaseTreeItem } from '../items/Base'
 import { ProgressRootItem } from '../items/ProgressRootItem'
+import { ProgressProjectItem } from '../items/ProgressProjectItem'
 import { EditorPanel } from '../../webview/panel'
 import { THROTTLE_DELAY } from '../../meta'
-import { Global, CurrentFile } from '~/core'
+import { Config, Global, CurrentFile, ResolvedRootContext } from '~/core'
 
 export class ProgressProvider implements TreeDataProvider<BaseTreeItem> {
   protected name = 'ProgressProvider'
@@ -31,9 +32,39 @@ export class ProgressProvider implements TreeDataProvider<BaseTreeItem> {
     return element
   }
 
+  private async getProjectItem(context: ResolvedRootContext) {
+    const loader = await Global.getLoaderForRootContext(context)
+    if (!loader)
+      return
+
+    return await Global.withRootContext(context, async() => {
+      const coverages = loader.locales
+        .map(locale => loader.getCoverage(locale))
+        .filter(notEmpty)
+
+      return new ProgressProjectItem(this.ctx, {
+        loader,
+        rootContext: context,
+        sourceLanguage: Config.sourceLanguage,
+        displayLanguage: Config.displayLanguage,
+        ignoredLocales: Config.ignoredLocales,
+        locales: loader.locales,
+      }, coverages)
+    })
+  }
+
   async getChildren(element?: BaseTreeItem) {
     if (element)
       return await element.getChildren()
+
+    const projectContexts = Global.getMonorepoRootContexts()
+    if (projectContexts.length) {
+      const items = []
+      for (const context of projectContexts)
+        items.push(await this.getProjectItem(context))
+      return items.filter(notEmpty)
+    }
+
     return Object.values(Global.allLocales)
       .map(node => CurrentFile.loader.getCoverage(node))
       .filter(notEmpty)

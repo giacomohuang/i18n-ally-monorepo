@@ -13,7 +13,7 @@ import { checkNotification } from '../update-notification'
 import { Reviews } from './Review'
 import { CurrentFile } from './CurrentFile'
 import { Config } from './Config'
-import { DirStructure, OptionalFeatures, KeyStyle, ResolvedMonorepoProjectConfig } from './types'
+import { DirStructure, OptionalFeatures, KeyStyle, ResolvedMonorepoProjectConfig, ResolvedRootContext } from './types'
 import { LocaleLoader } from './loaders/LocaleLoader'
 import { Analyst } from './Analyst'
 import { Telemetry, TelemetryKey } from './Telemetry'
@@ -285,8 +285,8 @@ export class Global {
     return rel === '' || (!!rel && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
   }
 
-  private static resolveRootContext(folder: WorkspaceFolder, filepath?: string) {
-    const projects = Config.getProjectsInScope(folder)
+  private static resolveProjectsInScope(folder: WorkspaceFolder, filepath?: string) {
+    return Config.getProjectsInScope(folder)
       .map((project, index) => ({ project, index }))
       .filter(({ project }) => project && typeof project.root === 'string' && project.root.trim())
       .map(({ project, index }): ResolvedMonorepoProjectConfig => {
@@ -302,6 +302,10 @@ export class Global {
       })
       .filter(project => !filepath || this.isPathInside(filepath, project.rootpath))
       .sort((a, b) => b.rootpath.length - a.rootpath.length)
+  }
+
+  private static resolveRootContext(folder: WorkspaceFolder, filepath?: string): ResolvedRootContext {
+    const projects = this.resolveProjectsInScope(folder, filepath)
 
     const project = projects[0]
     const rootpath = project?.rootpath || folder.uri.fsPath
@@ -313,7 +317,69 @@ export class Global {
     }
   }
 
-  private static async initLoader(rootpath: string, reload = false) {
+  static getMonorepoRootContexts(): ResolvedRootContext[] {
+    return workspace.workspaceFolders
+      ?.flatMap(folder => this.resolveProjectsInScope(folder)
+        .map(project => ({
+          rootpath: project.rootpath,
+          project,
+          workspaceFolder: folder,
+        }))) || []
+  }
+
+  private static updateEnabledFrameworks() {
+    if (!Config.enabledFrameworks) {
+      const packages = getPackageDependencies(this._rootpath)
+      this.enabledFrameworks = getEnabledFrameworks(packages, this._rootpath)
+    }
+    else {
+      const frameworks = Config.enabledFrameworks
+      this.enabledFrameworks = getEnabledFrameworksByIds(frameworks, this._rootpath)
+    }
+  }
+
+  static async withRootContext<T>(context: ResolvedRootContext, fn: () => T | Promise<T>): Promise<T> {
+    const previousRootpath = this._rootpath
+    const previousWorkspaceFolder = this._currentWorkspaceFolder
+    const previousProject = this._currentProject
+    const previousConfigProject = Config.currentProject
+    const previousConfigProjectScope = Config.currentProjectScope
+    const previousFrameworks = this.enabledFrameworks
+
+    try {
+      this._rootpath = context.rootpath
+      this._currentWorkspaceFolder = context.workspaceFolder
+      this._currentProject = context.project
+      Config.currentProject = context.project
+      Config.currentProjectScope = context.workspaceFolder
+      this.resetCache()
+      this.updateEnabledFrameworks()
+      return await fn()
+    }
+    finally {
+      this._rootpath = previousRootpath
+      this._currentWorkspaceFolder = previousWorkspaceFolder
+      this._currentProject = previousProject
+      Config.currentProject = previousConfigProject
+      Config.currentProjectScope = previousConfigProjectScope
+      this.enabledFrameworks = previousFrameworks
+      this.resetCache()
+    }
+  }
+
+  static async getLoaderForRootContext(context: ResolvedRootContext) {
+    return await this.withRootContext(context, async() => {
+      const isValidProject = this.enabledFrameworks.length > 0 && this.enabledParsers.length > 0
+      const hasLocalesSet = !!Global.localesPaths
+
+      if (!isValidProject || !hasLocalesSet)
+        return
+
+      return await this.initLoader(context.rootpath, false, context)
+    })
+  }
+
+  private static async initLoader(rootpath: string, reload = false, context?: ResolvedRootContext) {
     if (!rootpath)
       return
 
@@ -321,10 +387,13 @@ export class Global {
     //  clearNotificationState(this.context)
     checkNotification(this.context)
 
-    if (this._loaders[rootpath] && !reload)
-      return this._loaders[rootpath]
+    if (this._loaders[rootpath]) {
+      this._loaders[rootpath].rootContext = context
+      if (!reload)
+        return this._loaders[rootpath]
+    }
 
-    const loader = new LocaleLoader(rootpath)
+    const loader = new LocaleLoader(rootpath, context)
     await loader.init()
     this.context.subscriptions.push(loader.onDidChange(() => this._onDidChangeLoader.fire(loader)))
     this.context.subscriptions.push(loader)
@@ -426,14 +495,7 @@ export class Global {
         Log.info('🔁 Reloading loader')
     }
 
-    if (!Config.enabledFrameworks) {
-      const packages = getPackageDependencies(this._rootpath)
-      this.enabledFrameworks = getEnabledFrameworks(packages, this._rootpath)
-    }
-    else {
-      const frameworks = Config.enabledFrameworks
-      this.enabledFrameworks = getEnabledFrameworksByIds(frameworks, this._rootpath)
-    }
+    this.updateEnabledFrameworks()
     const isValidProject = this.enabledFrameworks.length > 0 && this.enabledParsers.length > 0
     const hasLocalesSet = !!Global.localesPaths
     const shouldEnabled = !Config.disabled && isValidProject && hasLocalesSet
@@ -447,7 +509,11 @@ export class Global {
 
       Telemetry.track(TelemetryKey.Enabled)
 
-      await this.initLoader(this._rootpath, reload)
+      await this.initLoader(this._rootpath, reload, {
+        rootpath: this._rootpath,
+        project: this._currentProject,
+        workspaceFolder: this._currentWorkspaceFolder,
+      })
     }
     else {
       if (!Config.disabled) {

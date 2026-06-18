@@ -7,10 +7,19 @@ import { Config, Global, CurrentFile, Telemetry, TelemetryKey, ActionSource } fr
 import i18n from '~/i18n'
 
 export async function GoToKey(item?: LocaleTreeItem | CommandOptions | ProgressRootItem) {
+  if (item instanceof LocaleTreeItem)
+    return await item.withContext(() => goToKey(item))
+  if (item instanceof ProgressRootItem)
+    return await item.withProgressContext(() => goToKey(item))
+
+  return await goToKey(item)
+}
+
+async function goToKey(item?: LocaleTreeItem | CommandOptions | ProgressRootItem) {
   if (item instanceof ProgressRootItem) {
     Telemetry.track(TelemetryKey.GoToKey, { source: ActionSource.TreeView })
     const locale = item.locale
-    const files = CurrentFile.loader.files.filter(f => f.locale === locale).map(f => f.filepath)
+    const files = item.loader.files.filter(f => f.locale === locale).map(f => f.filepath)
     let filepath: string| undefined
     if (files.length === 0) {
       return
@@ -32,6 +41,7 @@ export async function GoToKey(item?: LocaleTreeItem | CommandOptions | ProgressR
   else {
     Telemetry.track(TelemetryKey.GoToKey, { source: Telemetry.getActionSource(item) })
 
+    const loader = item instanceof LocaleTreeItem ? item.loader : CurrentFile.loader
     const node = getNodeOrRecord(item)
     if (!node)
       return
@@ -50,7 +60,7 @@ export async function GoToKey(item?: LocaleTreeItem | CommandOptions | ProgressR
     if (!locale)
       return
 
-    const record = await getRecordFromNode(node, locale)
+    const record = await getRecordFromNode(node, locale, loader)
 
     if (!record || !record.filepath)
       return

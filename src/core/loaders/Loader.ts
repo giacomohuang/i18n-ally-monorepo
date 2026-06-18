@@ -2,12 +2,13 @@
 import { Disposable, EventEmitter } from 'vscode'
 import { uniq, isObject } from 'lodash'
 import { LocaleTree, LocaleNode, LocaleRecord, FlattenLocaleTree } from '../Nodes'
-import { Coverage, FileInfo, PendingWrite, NodeOptions, RewriteKeySource, RewriteKeyContext, DataProcessContext } from '../types'
+import { Coverage, FileInfo, PendingWrite, NodeOptions, RewriteKeySource, RewriteKeyContext, DataProcessContext, ResolvedRootContext } from '../types'
 import { Config, Global } from '..'
 import { resolveFlattenRootKeypath, resolveFlattenRoot, NodeHelper } from '~/utils'
 
 const NESTED_PLURALIZATION_KEYS = ['one', 'other', 'zero', 'two', 'few', 'many']
 export abstract class Loader extends Disposable {
+  rootContext?: ResolvedRootContext
   protected _disposables: Disposable[] = []
   protected _onDidChange = new EventEmitter<string>()
   readonly onDidChange = this._onDidChange.event
@@ -322,7 +323,7 @@ export abstract class Loader extends Disposable {
     return locales
   }
 
-  abstract write (pendings: PendingWrite | PendingWrite[]): Promise<void>
+  abstract write (pendings: PendingWrite | PendingWrite[], triggerFullfilled?: boolean): Promise<void>
 
   canHandleWrites(pending: PendingWrite) {
     return false
