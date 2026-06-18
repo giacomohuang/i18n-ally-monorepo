@@ -3,7 +3,7 @@
 </p>
 
 <p align='center'>
-English | <a href="https://github.com/lokalise/i18n-ally/blob/main/README.zh-CN.md">简体中文</a>
+English | <a href="README.zh-CN.md">简体中文</a>
 </p>
 
 <p align="center">
