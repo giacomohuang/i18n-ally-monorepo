@@ -1,5 +1,5 @@
-import { window } from 'vscode'
-import { openFile, Global, is, not, expect, timeout, setupTest, getExt, KeyDetector } from '../../ctx'
+import { ConfigurationTarget, window, workspace } from 'vscode'
+import { openFile, Global, is, not, expect, timeout, setupTest, getExt, KeyDetector, CurrentFile } from '../../ctx'
 
 setupTest('React with i18next', () => {
   it('opens entry file', async() => {
@@ -31,5 +31,23 @@ setupTest('React with i18next', () => {
     await timeout(500)
     const keys = KeyDetector.getKeys(window.activeTextEditor!.document)
     expect(keys).to.matchSnapshot()
+  })
+
+  it('handles the global loader being unloaded', async() => {
+    const config = workspace.getConfiguration('i18n-ally')
+
+    try {
+      await config.update('disabled', true, ConfigurationTarget.Workspace)
+      await timeout(500)
+
+      is(Global.enabled, false)
+      is(Global.loader, undefined)
+      is(CurrentFile.loader.loaders.length, 0)
+      is(CurrentFile.loader.getValueByKey('missing.key'), undefined)
+    }
+    finally {
+      await config.update('disabled', undefined, ConfigurationTarget.Workspace)
+      await timeout(500)
+    }
   })
 })
