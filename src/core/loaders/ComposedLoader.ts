@@ -31,7 +31,9 @@ export class ComposedLoader extends Loader {
 
   set loaders(value: Loader[]) {
     this._watchers.forEach(d => d.dispose())
-    this._loaders = value
+    // Root/project resolution can temporarily produce no global loader. Keep
+    // the composed loader invariant that every entry is an actual Loader.
+    this._loaders = value.filter((loader): loader is Loader => !!loader)
     this._watchers = this.loaders.filter(i => i).map(loader =>
       loader.onDidChange((e) => {
         this._isFlattenLocaleTreeDirty = true

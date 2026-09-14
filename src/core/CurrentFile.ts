@@ -86,7 +86,10 @@ export class CurrentFile {
   }
 
   static updateLoaders() {
-    const loaders: Loader[] = [Global.loader]
+    // The global loader is unavailable while a workspace is being resolved or
+    // after the extension has been disabled. Keep it out of the composed
+    // loader rather than letting undefined leak into every lookup method.
+    const loaders: Loader[] = Global.loader ? [Global.loader] : []
 
     if (this.VueSfc && this._vue_sfc_loader)
       loaders.push(this._vue_sfc_loader)
